@@ -1,0 +1,60 @@
+parameters:
+  - name: "backendServiceArm"
+    type: string
+  - name: "backendAzureRmContainerName"
+    type: string
+  - name: "TerraformVersion"
+    type: string
+  - name: "workingDirectory"
+    type: string
+  - name: "TerraformStateFile"
+    type: string
+  - name: Environment
+    type: string
+  - name: "AzdoPrefix"
+    type: string
+    default: "azure.tf."
+  - name: StorageAccount
+    type: string
+  - name: ResourceGroup
+    type: string
+  - name: "AdditionalParameters"
+    type: string
+    default: ""
+steps:
+  - task: TerraformInstaller@0
+    displayName: Install Terraform
+    inputs:
+      terraformVersion: "${{ parameters.TerraformVersion }}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform init"
+    inputs:
+      provider: "azurerm"
+      command: "init"
+      backendAzureRmResourceGroupName: '${{parameters.ResourceGroup}}'
+      backendAzureRmStorageAccountName: '${{parameters.StorageAccount}}'
+      backendAzureRmContainerName: "${{parameters.backendAzureRmContainerName}}"
+      backendAzureRmKey: "${{parameters.TerraformStateFile}}"
+      backendServiceArm: "${{parameters.backendServiceArm}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform plan"
+    inputs:
+      provider: "azurerm"
+      command: "plan"
+      commandOptions: '-var-file="../config/common.tfvars" -var-file="../config/${{ parameters.Environment}}.tfvars" -input=false -out=plan.tfplan ${{parameters.AdditionalParameters}}'
+      environmentServiceNameAzureRM: "${{parameters.backendServiceArm}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform apply"
+    inputs:
+      provider: "azurerm"
+      command: "apply"
+      commandOptions: "plan.tfplan"
+      environmentServiceNameAzureRM: "${{parameters.backendServiceArm}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: terraform-outputs@0
+    inputs:
+      workingDirectory: "${{parameters.workingDirectory}}"
+      mapSensitiveOutputsAsSecrets: true
+      variablePrefix: "${{parameters.AzdoPrefix}}"

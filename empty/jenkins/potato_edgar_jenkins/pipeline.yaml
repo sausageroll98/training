@@ -1,0 +1,211 @@
+trigger:
+  branches:
+    include:
+      - refs/heads/main
+name: "$(TeamProject)_$(Build.DefinitionName)_$(Date:yyyyMMdd)$(Rev:.r)"
+parameters:
+  - name: PythonVersion
+    displayName: Python Version
+    type: string
+    values:
+      - 3.10
+    default: 3.10
+  - name: TerraformVersion
+    displayName: Terraform Version
+    type: string
+    values:
+      - 1.1.2
+    default: 1.1.2
+  - name: AzureRegion
+    displayName: Azure Region
+    type: string
+    values:
+      - northeurope
+    default: northeurope
+variables:
+  - name: Artifact.iac
+    value: "iac"
+  - name: Artifact.azure
+    value: "azure"
+  - name: Artifact.src
+    value: "src"
+  - name: "Terraform.StateFile"
+    value: "$(System.TeamProject)_$(Build.DefinitionName)_$(System.StageName)_state.tfstate"
+  - name: Artifact.ansible
+    value: "ansible"
+stages:
+  - stage: build
+    jobs:
+      - template: templates/jobs/shift_left.yaml
+        parameters:
+          PythonVersion: "${{ parameters.PythonVersion }}"
+          workingDirectory: "tests/ci"
+          name: "shift_left_testing"
+      - job: build
+        displayName: build artifacts
+        dependsOn: shift_left_testing
+        pool:
+          vmImage: windows-latest
+        steps:
+          - checkout: self
+            submodules: recursive
+            persistCredentials: true
+          - task: CopyFiles@2
+            displayName: Copy iac Files
+            inputs:
+              SourceFolder: $(Artifact.iac)
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/$(Artifact.iac)"
+              preserveTimestamp: true
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Artifact: iac"
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)/$(Artifact.iac)
+              ArtifactName: $(Artifact.iac)
+          - task: CopyFiles@2
+            displayName: Copy src Files
+            inputs:
+              SourceFolder: "tests/ci"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/$(Artifact.src)"
+              preserveTimestamp: true
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Artifact: src"
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)/$(Artifact.src)
+              ArtifactName: $(Artifact.src)
+          - template: templates/steps/azdo_git_tag.yaml
+            parameters:
+              Folder: "${{ parameters.PythonVersion }}"
+              workingDirectory: "tests/ci"
+              name: "git tag"
+  - stage: azure_iac_vm
+    displayName: "azure vm infrastructure"
+    dependsOn: build
+    variables:
+      - group: ce02-Azure-Terraform-dev
+    jobs:
+      - job: iac_vm
+        displayName: "VM infrastructure deployment"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - task: DownloadPipelineArtifact@2
+            displayName: Download iac artifact
+            inputs:
+              buildType: "current"
+              artifactName: "$(Artifact.iac)"
+              targetPath: "$(Pipeline.Workspace)/$(Artifact.iac)"
+          - task: DownloadSecureFile@1
+            name: key_vm
+            displayName: 'Download VM Public Key'
+            inputs:
+              secureFile: 'vm_key.pub'
+          - task: DownloadSecureFile@1
+            name: key_ansible
+            displayName: 'Download ansible Public Key'
+            inputs:
+              secureFile: 'ansible_key.pub'
+          - template: templates/steps/azdo_terraform_access_token.yaml
+            parameters:
+              Folder: "$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.azure)"
+          - template: templates/steps/azure_terraform.yaml
+            parameters:
+              backendServiceArm: "ce02-Azure-Terraform-dev"
+              backendAzureRmContainerName: "$(Tf.StorageContainer)"
+              ResourceGroup: "$(Tf.ResourceGroup)"
+              StorageAccount: "$(Tf.StorageAccount)"
+              TerraformVersion: "${{ parameters.TerraformVersion }}"
+              workingDirectory: "$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.azure)"
+              TerraformStateFile: "$(Terraform.StateFile)"
+              Environment: "dev"
+              AzdoPrefix: 'terraform.azure.'
+              AdditionalParameters: '-var-file="../config/team.tfvars" -var "public_key_file=$(key_vm.secureFilePath)" -var "ansible_public_key_file=$(key_ansible.secureFilePath)" -var "location=${{parameters.AzureRegion}}'
+          - script: |
+              echo "##vso[task.setvariable variable=azure_public_ip_address;isOutput=true]$(terraform.azure.public_ip_address)"
+            name: outputs
+            displayName: "create azure stage outputs"
+  # - task: CmdLine@2
+  #   displayName: 'Ansible Configure'
+  #   inputs:
+  #     script: |
+  #       chmod 400 $(key_ansible_private.secureFilePath)
+  #       export ANSIBLE_HOST_KEY_CHECKING=False
+  #       ansible-galaxy collection install community.general
+  #       ansible-playbook -i hosts -u ansible --key-file $(key_ansible_private.secureFilePath) promote.yaml
+  #     failOnStderr: true
+  #     workingDirectory: '$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.ansible)'
+
+  - stage: ansible
+    displayName: "multi-cloud ansible configuration"
+    dependsOn:
+      - azure_iac_vm
+    variables:
+      - name: terraform.azure.public_ip_address
+        value: $[stageDependencies.azure_iac_vm.iac_vm.outputs['outputs.azure_public_ip_address']]
+    jobs:
+      - job: ansible
+        displayName: "ansible deployment"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - task: DownloadPipelineArtifact@2
+            displayName: Download iac artifact
+            inputs:
+              buildType: "current"
+              artifactName: "$(Artifact.iac)"
+              targetPath: "$(Pipeline.Workspace)/$(Artifact.iac)"
+          - task: DownloadSecureFile@1
+            name: key_ansible
+            displayName: 'Download ansible Public Key'
+            inputs:
+              secureFile: 'ansible_key.pub'
+          - task: DownloadSecureFile@1
+            name: key_edgar
+            displayName: 'Download edgar Public Key'
+            inputs:
+              secureFile: 'edgar_key.pub'
+          - task: replacetokens@3
+            inputs:
+              rootDirectory: "$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.ansible)"
+              targetFiles: 'hosts'
+              encoding: 'auto'
+              writeBOM: true
+              actionOnMissing: 'warn'
+              keepToken: false
+              tokenPrefix: '<<<'
+              tokenSuffix: '>>>'
+              useLegacyPattern: false
+              emptyValue:
+              enableTransforms: false
+              enableTelemetry: true
+            displayName: 'Replace tokens in Ansible hosts'
+          - template: templates/steps/azdo_ansible_update_hosts.yaml
+            parameters:
+              FileName: "$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.ansible)/hosts"
+          - task: DownloadSecureFile@1
+            displayName: 'Download ansible Private Key'
+            name: key_ansible_private
+            inputs:
+              secureFile: 'ansible_key'
+          - task: CmdLine@2
+            displayName: 'Ansible Ping'
+            inputs:
+              script: |
+                chmod 400 $(key_ansible_private.secureFilePath)
+                export ANSIBLE_HOST_KEY_CHECKING=False
+                ansible all -i hosts -u ansible --key-file $(key_ansible_private.secureFilePath) -m ping
+              failOnStderr: true
+              workingDirectory: '$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.ansible)'
+          - task: CmdLine@2
+            displayName: 'Ansible Setup'
+            inputs:
+              script: |
+                chmod 400 $(key_ansible_private.secureFilePath)
+                export ANSIBLE_HOST_KEY_CHECKING=False
+                ansible-galaxy collection install community.general
+                ansible-playbook -i hosts -u ansible --key-file $(key_ansible_private.secureFilePath) ce02.yaml
+              failOnStderr: true
+              workingDirectory: '$(Pipeline.Workspace)/$(Artifact.iac)/$(Artifact.ansible)'
