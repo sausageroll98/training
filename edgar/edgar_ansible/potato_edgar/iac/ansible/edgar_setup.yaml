@@ -1,0 +1,37 @@
+---
+# Create ce02 folder
+- name: Create ce02 folder to Contain Edgar API etc
+  file:
+    path: /tmp/ce02/edgar
+    state: directory
+    mode: "0777"
+
+# Create folder for raw 10-k reports
+- name: Create Raw html Reports Cache Folder
+  file:
+    path: /tmp/potato/10k_reports_raw
+    state: directory
+    mode: "0777"
+
+# Copy files from windows to linux setup
+- name: Copy files from Edgar folder to tmp/ce02
+  ansible.builtin.copy:
+    src: ./edgar/
+    dest: /tmp/ce02/edgar
+
+# As name suggests
+- name: Install python3-pip for Python packages
+  apt:
+    name: python3-pip
+    state: present
+
+# As name suggests
+- name: Install Python packages from requirements.txt
+  pip:
+    requirements: /tmp/ce02/edgar/requirements.txt
+
+# Running uvicorn to host the api locally
+- name: Host the local FastAPI with uvicorn
+  shell:
+    cmd: uvicorn edgar_api:app --reload --host 127.0.0.1 --port 8000
+    chdir: /tmp/ce02/edgar

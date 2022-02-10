@@ -1,0 +1,56 @@
+parameters:
+  - name: "backendServiceAWS"
+    type: string
+  - name: "AwsRegion"
+    type: string
+  - name: "backendAWSBucketName"
+    type: string
+  - name: "TerraformVersion"
+    type: string
+  - name: "workingDirectory"
+    type: string
+  - name: "TerraformStateFile"
+    type: string
+  - name: Environment
+    type: string
+  - name: "AzdoPrefix"
+    type: string
+    default: "aws.tf."
+  - name: "AdditionalParameters"
+    type: string
+    default: ""
+steps:
+  - task: TerraformInstaller@0
+    displayName: Install Terraform
+    inputs:
+      terraformVersion: "${{ parameters.TerraformVersion }}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform init"
+    inputs:
+      provider: "aws"
+      command: "init"
+      backendAWSBucketName: "${{parameters.backendAWSBucketName}}"
+      backendAWSKey: "${{parameters.TerraformStateFile}}"
+      backendServiceAWS: "${{parameters.backendServiceAWS}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform plan"
+    inputs:
+      provider: "aws"
+      command: "plan"
+      commandOptions: '-var "region=${{parameters.AwsRegion}}" -var-file="../config/common.tfvars" -var-file="../config/${{ parameters.Environment}}.tfvars" -input=false -out=plan.tfplan ${{parameters.AdditionalParameters}}'
+      environmentServiceNameAWS: "${{parameters.backendServiceAWS}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform apply"
+    inputs:
+      provider: "aws"
+      command: "apply"
+      commandOptions: "plan.tfplan"
+      environmentServiceNameAWS: "${{parameters.backendServiceAWS}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: terraform-outputs@0
+    inputs:
+      workingDirectory: "${{parameters.workingDirectory}}"
+      mapSensitiveOutputsAsSecrets: true
+      variablePrefix: "${{parameters.AzdoPrefix}}"
