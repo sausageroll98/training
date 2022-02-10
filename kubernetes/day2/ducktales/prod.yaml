@@ -1,0 +1,68 @@
+---
+  kind: Namespace
+  apiVersion: v1
+  metadata:
+    name: ducktales-prod
+---
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    name: duck
+    namespace: ducktales-prod
+  type: Opaque
+  data:
+    user: TG91aWU=
+--- 
+  kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: ducktales-prod
+    namespace: ducktales-prod
+  spec:
+    replicas: 7
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
+          maxSurge: 1
+    selector:
+      matchLabels:
+        app: ducktales-prod
+    template:
+      metadata:
+        labels:
+          app: ducktales-prod
+      spec:
+        containers:
+          - name: ducktales-prod
+            image: localhost:5000/ducktales:prod
+            imagePullPolicy: Always
+            resources:
+              limits:
+                cpu: "0.25"
+                memory: "512Mi"
+              requests:
+                cpu: "250m"
+                memory: "50Mi"
+            env:
+              - name: DUCK
+                valueFrom:
+                  secretKeyRef:
+                    name: duck
+                    key: user
+---
+  kind: Service
+  apiVersion: v1
+  metadata:
+    name: ducktales-prod
+    namespace: ducktales-prod
+  spec:
+    selector:
+      app: ducktales-prod
+    ports:
+      - name: http
+        port: 8101
+        protocol: TCP
+        targetPort: 8080
+    type: NodePort
+      
