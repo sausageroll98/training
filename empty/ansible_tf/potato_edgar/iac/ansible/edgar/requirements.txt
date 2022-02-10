@@ -1,9 +1,0 @@
-edgar
-tqdm
-bs4
-pandas
-yahoofinancials
-matplotlib
-sklearn
-fastapi
-uvicorn

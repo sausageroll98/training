@@ -1,0 +1,17 @@
+- name: install mysql
+  apt:
+    name: mysql-server
+    update_cache: yes
+    cache_valid_time: 3600
+    state: present
+
+- name: "Install ansible python3 mysql dependency"
+  apt:
+    name: python3-mysqldb
+    state: latest
+
+- name: ensure mysql is enabled to run on startup
+  service:
+    name: mysql
+    state: started
+    enabled: true

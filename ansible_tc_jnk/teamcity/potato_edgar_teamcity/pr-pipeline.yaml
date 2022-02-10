@@ -1,0 +1,27 @@
+name: "$(TeamProject)_$(Build.DefinitionName)_PR_$(Date:yyyyMMdd)$(Rev:.r)"
+trigger: none
+parameters:
+  - name: PythonVersion
+    displayName: Python Version
+    type: string
+    values:
+      - 3.10
+    default: 3.10
+  - name: TerraformVersion
+    displayName: Terraform Version
+    type: string
+    values:
+      - 1.1.2
+    default: 1.1.2
+stages:
+  - stage: build
+    displayName: "build"
+    pool:
+      vmImage: windows-latest
+
+    jobs:
+      - template: templates/jobs/shift_left.yaml
+        parameters:
+          PythonVersion: "${{ parameters.PythonVersion }}"
+          workingDirectory: "tests/ci"
+          name: "shift_left"

@@ -1,0 +1,59 @@
+parameters:
+  - name: "ansible_key_name"
+    type: string
+  - name: "additional_key_name"
+    type: string
+  - name: "workingDirectory"
+    type: string
+  - name: "user"
+    type: string
+  - name: "playbook"
+    type: string
+steps:
+  - task: DownloadSecureFile@1
+    displayName: 'Download ansible Private Key'
+    name: key_ansible_private
+    inputs:
+      secureFile: '${{parameters.ansible_key_name}}'
+  - task: DownloadSecureFile@1
+    name: key_additional
+    displayName: 'Download external Public Key'
+    inputs:
+      secureFile: '${{parameters.additional_key_name}}'
+  - task: replacetokens@3
+    inputs:
+      rootDirectory: "${{parameters.workingDirectory}}"
+      targetFiles: 'hosts'
+      encoding: 'auto'
+      writeBOM: true
+      actionOnMissing: 'warn'
+      keepToken: false
+      tokenPrefix: '<<<'
+      tokenSuffix: '>>>'
+      useLegacyPattern: false
+      emptyValue:
+      enableTransforms: false
+      enableTelemetry: true
+    displayName: 'Replace tokens in Ansible hosts'
+  - template: templates/steps/azdo_ansible_update_hosts.yaml
+    parameters:
+      FileName: "${{parameters.workingDirectory}}/hosts"
+  - task: CmdLine@2
+    displayName: 'Ansible Ping'
+    inputs:
+      script: |
+        chmod 400 $(key_ansible_private.secureFilePath)
+        export ANSIBLE_HOST_KEY_CHECKING=False
+        ansible all -i hosts -u ${{parameters.user}} --key-file $(key_ansible_private.secureFilePath) -m ping
+      failOnStderr: true
+      workingDirectory: '${{parameters.workingDirectory}}'
+  - task: CmdLine@2
+    displayName: 'Edgar Configure'
+    inputs:
+      script: |
+        chmod 400 $(key_ansible_private.secureFilePath)
+        export ANSIBLE_HOST_KEY_CHECKING=False
+        ansible-galaxy collection install community.general
+        ansible-playbook -i hosts -u ${{parameters.user}} --key-file $(key_ansible_private.secureFilePath) ${{parameters.playbook}} --extra-vars "user_pub_key=$(key_additional.secureFilePath)"
+      failOnStderr: true
+      workingDirectory: '${{parameters.workingDirectory}}'

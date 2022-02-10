@@ -1,0 +1,54 @@
+parameters:
+  - name: "backendServiceGCP"
+    type: string
+  - name: "backendGCPBucketName"
+    type: string
+  - name: "TerraformVersion"
+    type: string
+  - name: "workingDirectory"
+    type: string
+  - name: "TerraformStateFile"
+    type: string
+  - name: Environment
+    type: string
+  - name: "AzdoPrefix"
+    type: string
+    default: "gcp.tf."
+  - name: "AdditionalParameters"
+    type: string
+    default: ""
+steps:
+  - task: TerraformInstaller@0
+    displayName: Install Terraform
+    inputs:
+      terraformVersion: "${{ parameters.TerraformVersion }}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform init"
+    inputs:
+      provider: "gcp"
+      command: "init"
+      backendGCPBucketName: "${{parameters.backendGCPBucketName}}"
+      backendServiceGCP: "${{parameters.backendServiceGCP}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+      backendGCPPrefix: "${{parameters.TerraformStateFile}}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform plan"
+    inputs:
+      provider: "gcp"
+      command: "plan"
+      commandOptions: '-var-file="../config/common.tfvars" -var-file="../config/${{ parameters.Environment}}.tfvars" -input=false -out=plan.tfplan ${{parameters.AdditionalParameters}}'
+      environmentServiceNameGCP: "${{parameters.backendServiceGCP}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: TerraformTaskV2@2
+    displayName: "terraform apply"
+    inputs:
+      provider: "gcp"
+      command: "apply"
+      commandOptions: "plan.tfplan"
+      environmentServiceNameGCP: "${{parameters.backendServiceGCP}}"
+      workingDirectory: "${{parameters.workingDirectory}}"
+  - task: terraform-outputs@0
+    inputs:
+      workingDirectory: "${{parameters.workingDirectory}}"
+      mapSensitiveOutputsAsSecrets: true
+      variablePrefix: "${{parameters.AzdoPrefix}}"

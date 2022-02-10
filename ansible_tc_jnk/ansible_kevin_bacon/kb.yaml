@@ -1,0 +1,21 @@
+---
+- name: ansible create ce02 folder
+  file:
+    path: /tmp/ce02
+    state: directory
+    mode: "u=rw,g=wx,o=rwx"
+- name: Copy src files for kb
+  ansible.builtin.copy:
+    src: ./src/
+    dest: /tmp/ce02
+- name: Install python3-pip  (state=present is optional)
+  apt:
+    name: python3-pip
+    state: present
+- name: Install specified python requirements
+  pip:
+    requirements: /tmp/ce02/requirements.txt
+- name: execute install script
+  shell:
+    cmd: python3 -m six_degrees_of_kevin_bacon
+    chdir: /tmp/ce02/

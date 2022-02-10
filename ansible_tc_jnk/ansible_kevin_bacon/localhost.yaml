@@ -1,0 +1,9 @@
+---
+- name: generic localhost playbook
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  tasks:
+    - import_tasks: locale.yaml
+    - import_tasks: updates.yaml
+    - import_tasks: kb.yaml

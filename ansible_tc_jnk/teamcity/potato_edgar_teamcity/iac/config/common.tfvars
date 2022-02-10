@@ -1,0 +1,12 @@
+environment = "dev"
+region_code = "eun"
+instance    = 1
+cohort      = 2
+application = "tc"
+project     = "ce02"
+admin_name  = "ubuntu"
+# password         = "Potato2*"
+ansible_username = "ansible"
+pod              = "potato"
+location         = "northeurope"
+string_length    = "12"

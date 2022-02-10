@@ -1,0 +1,10 @@
+environment      = "dev"
+region_code      = "eun"
+instance         = 1
+cohort           = 2
+application      = "jen"
+project          = "ce02"
+admin_name       = "ubuntu"
+ansible_username = "ansible"
+pod              = "potato"
+location         = "northeurope"
