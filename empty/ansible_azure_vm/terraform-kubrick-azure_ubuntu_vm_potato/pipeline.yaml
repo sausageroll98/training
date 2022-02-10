@@ -1,0 +1,32 @@
+name: "$(TeamProject)_$(Build.DefinitionName)_$(Date:yyyyMMdd)$(Rev:.r)"
+
+parameters:
+  - name: PythonVersion
+    displayName: Python Version
+    type: string
+    values:
+      - 3.10
+    default: 3.10
+  - name: TerraformVersion
+    displayName: Terraform Version
+    type: string
+    values:
+      - 1.1.2
+    default: 1.1.2
+stages:
+  - stage: build
+    jobs:
+      - template: templates/jobs/shift_left.yaml
+        parameters:
+          PythonVersion: "${{ parameters.PythonVersion }}"
+          workingDirectory: "tests/ci"
+          name: "shift_left_testing"
+      - job: tag
+        displayName: tag source
+        dependsOn: shift_left_testing
+        pool:
+          vmImage: windows-latest
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - template: templates/steps/azdo_git_tag.yaml
