@@ -1,0 +1,7 @@
+parameters:
+  - name: "FileName"
+    type: string
+steps:
+  - pwsh: |
+      (gc ${{parameters.FileName}}).Replace(",","`n") | Out-File ${{parameters.FileName}}
+    displayName: 'Make CSV Variable multi-line in hosts '

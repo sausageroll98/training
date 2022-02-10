@@ -1,0 +1,31 @@
+parameters:
+  - name: "PythonVersion"
+    type: string
+  - name: "workingDirectory"
+    type: string
+  - name: "name"
+    type: string
+  - name: "TestResults"
+    type: string
+    default: "TEST-CI"
+jobs:
+  - job: ${{ parameters.name }}
+    displayName: "shift left testing"
+    pool:
+      vmImage: "ubuntu-latest"
+    steps:
+      - checkout: self
+      - task: UsePythonVersion@0
+        displayName: Use Python ${{ parameters.PythonVersion }}
+        inputs:
+          versionSpec: "${{ parameters.PythonVersion }}"
+      - task: CmdLine@2
+        displayName: Run shift-left tests
+        inputs:
+          script: "pip install -r requirements.txt \npytest -v --junitxml=${{ parameters.TestResults }}.xml"
+          workingDirectory: "${{ parameters.workingDirectory }}"
+      - task: PublishTestResults@2
+        displayName: Publish Test Results **/${{ parameters.TestResults }}.xml
+        condition: succeededOrFailed()
+        inputs:
+          failTaskOnFailedTests: true
