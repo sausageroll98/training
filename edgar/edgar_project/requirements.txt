@@ -1,0 +1,11 @@
+bs4
+edgar
+yahoofinancials
+tqdm
+pandas
+requests
+parser-libraries
+sklearn
+matplotlib
+fastapi
+uvicorn
