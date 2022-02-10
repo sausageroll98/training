@@ -1,0 +1,37 @@
+---
+- hosts: servers
+  become: true
+  become_user: root
+
+  vars:
+    #  mysql_user: root
+    #   # mysql_password: password
+    # edgar_database: edgar
+    ansible_python_interpreter: "/usr/bin/python3"
+    mysql_password: password
+    runtime_user: edgar
+    edgar_database: edgar
+    mysql_user: edgar
+  tasks:
+    - import_tasks: locale.yaml
+    - import_tasks: updates.yaml
+    # - import_tasks: python3_9.yaml
+    - import_tasks: mysql_install.yaml
+    - import_tasks: users.yaml
+      vars:
+        user: "{{ runtime_user }}"
+        user_pub_key: "{{ user_pub_key }}"
+    - import_tasks: mysql_edgar.yaml
+      vars:
+        user: "{{ mysql_user }}"
+        password: "{{ mysql_password }}"
+        login_user: "{{ mysql_user }}"
+        login_password: "{{ mysql_password }}"
+    - name: Ansible python files to remote server
+      become: true
+      copy:
+        src: ../src
+        dest: /home/{{ runtime_user }}
+        owner: "{{ runtime_user }}"
+        group: "{{ runtime_user }}"
+        mode: 0664

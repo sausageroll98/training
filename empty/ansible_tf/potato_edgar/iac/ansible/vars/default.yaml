@@ -1,0 +1,5 @@
+---
+app_user: "ansible"
+mysql_root_password: password
+edgar_database: edgar
+runtime_user: edgar
